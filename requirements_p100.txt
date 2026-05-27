@@ -1,0 +1,20 @@
+# Special requirements file for Tesla P100 GPU (sm_60 capability)
+# Tesla P100 has a CUDA compute capability of 6.0. Newer PyTorch builds for CUDA 12+ drop sm_60 support.
+# Installing PyTorch compiled with CUDA 11.8 (cu118) preserves sm_60 out-of-the-box.
+
+--extra-index-url https://download.pytorch.org/whl/cu118
+
+torch==2.2.2+cu118
+torchinfo
+underthesea
+tokenizers
+pandarallel
+pyarrow
+evaluate
+rouge_score
+pyngrok
+tqdm
+pandas
+numpy
+pyyaml
+tensorboard
