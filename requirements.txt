@@ -1,0 +1,14 @@
+torch>=2.0.0
+torchinfo
+underthesea
+tokenizers
+pandarallel
+pyarrow
+evaluate
+rouge_score
+pyngrok
+tqdm
+pandas
+numpy
+pyyaml
+tensorboard

@@ -1,0 +1,19 @@
+# Configuration for training Transformer from scratch
+model:
+  d_model: 512
+  d_ff: 2048
+  h: 8
+  n: 6
+  dropout: 0.1
+  vocab_size: 36000
+
+data:
+  max_seq_len: 1024
+  max_sum_len: 360
+
+train:
+  seed: 42
+  batch_size: 8
+  epochs: 100
+  warmup_steps: 4000
+  patience: 10
