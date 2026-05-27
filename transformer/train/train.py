@@ -114,7 +114,10 @@ def train_loop(model, optimizer, criterion, scheduler, train_dataloader, val_dat
     non_improve_count = 0
     best_val_loss = float('inf') if best_val_loss is None else best_val_loss
     is_cuda = torch.cuda.is_available()
-    scaler = GradScaler('cuda', enabled=is_cuda)
+    try:
+        scaler = GradScaler(device='cuda', enabled=is_cuda)
+    except TypeError:
+        scaler = GradScaler(enabled=is_cuda)
     writer = SummaryWriter('outputs/runs/baseline_transformer')
     
     for e in range(start_epoch, start_epoch + epoch):
