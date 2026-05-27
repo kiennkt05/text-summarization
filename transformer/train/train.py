@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import multiprocessing
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast
@@ -152,6 +153,8 @@ def main():
     parser = argparse.ArgumentParser(description="Train custom Transformer from scratch")
     parser.add_argument("--train_path", type=str, required=True, help="Path to tokenized train parquet dataset")
     parser.add_argument("--val_path", type=str, required=True, help="Path to tokenized validation parquet dataset")
+    parser.add_argument("--train_compounded_path", type=str, default=None, help="Optional path to save/load segmented train parquet")
+    parser.add_argument("--val_compounded_path", type=str, default=None, help="Optional path to save/load segmented validation parquet")
     parser.add_argument("--tokenizer_path", type=str, default="train_summarization_tokenizer.json", help="Path to BPE tokenizer JSON file")
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints", help="Directory to save model checkpoints")
     parser.add_argument("--epochs", type=int, default=config.EPOCHS, help="Number of training epochs")
@@ -161,16 +164,37 @@ def main():
 
     # Load datasets
     print("Loading datasets...")
-    train_df = pd.read_parquet(args.train_path)
-    val_df = pd.read_parquet(args.val_path)
+    
+    # Optional compounded-parquet caching for train dataset
+    if args.train_compounded_path and os.path.exists(args.train_compounded_path):
+        print(f"Loading cached train dataset from {args.train_compounded_path}")
+        train_df = pd.read_parquet(args.train_compounded_path)
+    else:
+        print(f"Loading raw train dataset from {args.train_path} and segmenting text...")
+        train_df = pd.read_parquet(args.train_path)
+        train_df = train_df.dropna()
+        train_df['article'] = train_df['article'].parallel_apply(segment_text)
+        train_df['summary'] = train_df['summary'].parallel_apply(segment_text)
+        if args.train_compounded_path:
+            print(f"Caching compounded train dataset to {args.train_compounded_path}")
+            train_df.to_parquet(args.train_compounded_path)
+
+    # Optional compounded-parquet caching for validation dataset
+    if args.val_compounded_path and os.path.exists(args.val_compounded_path):
+        print(f"Loading cached validation dataset from {args.val_compounded_path}")
+        val_df = pd.read_parquet(args.val_compounded_path)
+    else:
+        print(f"Loading raw validation dataset from {args.val_path} and segmenting text...")
+        val_df = pd.read_parquet(args.val_path)
+        val_df = val_df.dropna()
+        val_df['article'] = val_df['article'].parallel_apply(segment_text)
+        val_df['summary'] = val_df['summary'].parallel_apply(segment_text)
+        if args.val_compounded_path:
+            print(f"Caching compounded validation dataset to {args.val_compounded_path}")
+            val_df.to_parquet(args.val_compounded_path)
 
     train_df = train_df.dropna()
     val_df = val_df.dropna()
-
-    train_df['article'] = train_df['article'].parallel_apply(segment_text)
-    train_df['summary'] = train_df['summary'].parallel_apply(segment_text)
-    val_df['article'] = val_df['article'].parallel_apply(segment_text)
-    val_df['summary'] = val_df['summary'].parallel_apply(segment_text)
     
     # Load tokenizer
     print("Loading tokenizer...")
@@ -187,6 +211,15 @@ def main():
     val_df['article_ids'] = val_df['article'].apply(lambda x: tokenizer.encode(x).ids)
     val_df['summary_ids'] = val_df['summary'].apply(lambda x: tokenizer.encode(x).ids)
 
+    # Replicate validation UNK-rate computation/printing from baseline-transformer.ipynb
+    from torch.nn.utils.rnn import pad_sequence
+    val_ids = [encoding.ids for encoding in tokenizer.encode_batch(val_df['article'].to_list() + val_df['summary'].to_list())]
+    val_ids = pad_sequence([torch.tensor(ids) for ids in val_ids], batch_first=True, padding_value=pad_idx)
+    count_unk = val_ids == tokenizer.token_to_id('<UNK>')
+    padding_mask = val_ids == pad_idx
+    print(count_unk.sum().item())
+    print((count_unk.sum() / (count_unk.numel() - padding_mask.sum())).item())
+
     train_dataset = SummarizationDataset(train_df)
     val_dataset = SummarizationDataset(val_df)
 
@@ -201,6 +234,7 @@ def main():
     g = torch.Generator()
     g.manual_seed(config.SEED)
     
+    optimal_workers = multiprocessing.cpu_count()
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=config.BATCH_SIZE,
@@ -209,7 +243,8 @@ def main():
         worker_init_fn=seed_worker,
         generator=g,
         pin_memory=True,
-        num_workers=0  # set to 0 for compatibility, can scale up dynamically
+        persistent_workers=(optimal_workers > 0),
+        num_workers=optimal_workers
     )
 
     validate_dataloader = DataLoader(
@@ -218,7 +253,8 @@ def main():
         shuffle=False,
         collate_fn=collator,
         pin_memory=True,
-        num_workers=0
+        persistent_workers=(optimal_workers > 0),
+        num_workers=optimal_workers
     )
 
     print("Building model...")
