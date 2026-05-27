@@ -7,7 +7,11 @@ import torch.nn as nn
 import multiprocessing
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from torch.amp import GradScaler, autocast
+from torch.amp import autocast
+try:
+    from torch.amp import GradScaler
+except ImportError:
+    from torch.cuda.amp import GradScaler
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 from pandarallel import pandarallel
