@@ -9,8 +9,11 @@ from torch.utils.data import DataLoader
 from torch.amp import GradScaler, autocast
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from pandarallel import pandarallel
+pandarallel.initialize(progress_bar=False)
 
-from transformer.model.transformer import BaselineTransformer, Batch
+
+from ..model.transformer import BaselineTransformer, Batch
 from transformer.train.scheduler import build_scheduler
 from transformer.train import config
 from utils.data.dataset import SummarizationDataset
@@ -155,13 +158,6 @@ def main():
     args = parser.parse_args()
 
     seed(config.SEED)
-    
-    # Load tokenizer
-    text_list = train_df['article'].to_list() + train_df['summary'].to_list()
-    tokenizer = load_tokenizer(text_list=text_list, vocab_size=config.VOCAB_SIZE, save_path=args.tokenizer_path)
-    pad_idx = tokenizer.token_to_id('<PAD>')
-    bos_idx = tokenizer.token_to_id('<BOS>')
-    eos_idx = tokenizer.token_to_id('<EOS>')
 
     # Load datasets
     print("Loading datasets...")
@@ -176,6 +172,21 @@ def main():
     val_df['article'] = val_df['article'].parallel_apply(segment_text)
     val_df['summary'] = val_df['summary'].parallel_apply(segment_text)
     
+    # Load tokenizer
+    print("Loading tokenizer...")
+    text_list = train_df['article'].to_list() + train_df['summary'].to_list()
+    tokenizer = load_tokenizer(text_list=text_list, vocab_size=config.VOCAB_SIZE, save_path=args.tokenizer_path)
+    pad_idx = tokenizer.token_to_id('<PAD>')
+    bos_idx = tokenizer.token_to_id('<BOS>')
+    eos_idx = tokenizer.token_to_id('<EOS>')
+
+    # Tokenize datasets
+    print("Tokenizing datasets...")
+    train_df['article_ids'] = train_df['article'].apply(lambda x: tokenizer.encode(x).ids)
+    train_df['summary_ids'] = train_df['summary'].apply(lambda x: tokenizer.encode(x).ids)
+    val_df['article_ids'] = val_df['article'].apply(lambda x: tokenizer.encode(x).ids)
+    val_df['summary_ids'] = val_df['summary'].apply(lambda x: tokenizer.encode(x).ids)
+
     train_dataset = SummarizationDataset(train_df)
     val_dataset = SummarizationDataset(val_df)
 

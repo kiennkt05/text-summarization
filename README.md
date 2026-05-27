@@ -81,7 +81,7 @@ text-summarization/
 ### 1. Installation
 To install the system in development/editable mode (enabling clean absolute imports):
 ```bash
-pip install -e .
+pip install -r requirements.txt
 ```
 
 ### 2. Running Verification Tests
@@ -93,16 +93,8 @@ make test
 ### 3. Training the Transformer from Scratch
 Run the resumable training script via command line:
 ```bash
-python transformer/train/train.py \
+python -m transformer.train.train \
   --train_path /path/to/train_compounded.parquet \
   --val_path /path/to/val_compounded.parquet \
   --tokenizer_path train_summarization_tokenizer.json
-```
-Or use the Makefile shortcut:
-```bash
-make train-scratch TRAIN_PATH=data/train.parquet VAL_PATH=data/val.parquet TOKENIZER_PATH=train_summarization_tokenizer.json
-```
-Training progress is automatically logged to TensorBoard and can be viewed using:
-```bash
-tensorboard --logdir outputs/runs
 ```
