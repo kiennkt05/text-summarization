@@ -58,7 +58,7 @@ class Encoder(nn.Module):
     """
     Core Encoder composed of a stack of N EncoderLayers, along with embeddings and pos_encoding.
     """
-    def __init__(self, d_model, d_ff, h, N, vocab_size, dropout=0.1):
+    def __init__(self, d_model, d_ff, h, N, vocab_size=36000, dropout=0.1):
         super().__init__()
         self.layers = clones(EncoderLayer(d_model, d_ff, h, dropout=dropout), N)
         self.embedding = Embeddings(d_model, vocab_size)

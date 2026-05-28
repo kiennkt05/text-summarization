@@ -30,7 +30,7 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, step=0):
         # Add sinusoidal positional encoding to inputs
-        x = x + self.pe[:, :x.size(1)].requires_grad_(False)
+        x = x + self.pe[:, step : step + x.size(1)].requires_grad_(False)
         return self.dropout(x)

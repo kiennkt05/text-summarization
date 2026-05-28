@@ -29,20 +29,27 @@ class MultiHeadAttention(nn.Module):
         self.linears = nn.ModuleList([nn.Linear(d_model, d_model) for _ in range(4)])
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, query, key, value, mask=None, past_key_value=None, use_cache=False):
+    def forward(self, query, key, value, mask=None, past_key_value=None, use_cache=False, is_cross_attention=False):
         batch_size = query.size(0)
         
-        # Project and reshape inputs: batch_size, h, seq_len, d_k
-        query, key, value = [
-            linear(x).view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
-            for linear, x in zip(self.linears[:3], (query, key, value))
-        ]
-        
         if past_key_value is not None:
-            K, V = past_key_value
-            key = torch.cat((K, key), dim=-2)
-            value = torch.cat((V, value), dim=-2)
-
+            if is_cross_attention: 
+                query = self.linears[0](query).view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
+                key, value = past_key_value
+            else: 
+                query, key, value = [
+                    linear(x).view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
+                    for linear, x in zip(self.linears[:3], (query, key, value))
+                ]
+                K, V = past_key_value
+                key = torch.cat([K, key], dim=-2)
+                value = torch.cat([V, value], dim=-2)
+        else: 
+            query, key, value = [
+                linear(x).view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
+                for linear, x in zip(self.linears[:3], (query, key, value))
+            ]
+            
         present_key_value = (key, value) if use_cache else None
 
         if mask is not None:

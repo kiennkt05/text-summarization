@@ -98,3 +98,12 @@ python -m transformer.train.train \
   --val_path /path/to/val_compounded.parquet \
   --tokenizer_path train_summarization_tokenizer.json
 ```
+
+### 4. Evaluating the Model
+Evaluate your checkpoints using the high-speed KV-caching decoder to compute ROUGE, BLEU, and BERTScore:
+```bash
+python -m transformer.evaluate.metrics \
+  --test_path /path/to/test_compounded.parquet \
+  --tokenizer_path train_summarization_tokenizer.json \
+  --checkpoint_path checkpoints/best_checkpoint.pt
+```
