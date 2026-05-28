@@ -4,33 +4,27 @@ from tqdm import tqdm
 from transformer.model.transformer import Batch
 from transformer.evaluate.inference import generate_summary
 from utils.data.preprocessing import segment_text
+from pandarallel import pandarallel
+pandarallel.initialize(progress_bar=False)
 
-def evaluate_model(model, test_dataloader, bos_idx, eos_idx, pad_idx, tokenizer, device='cpu'):
-    """
-    Evaluate the transformer on a test dataloader using ROUGE, BLEU, and BERTScore.
-    """
+def evaluate_model(model, test_dataloader, bos_idx, eos_idx, pad_idx, tokenizer):
     actual_model = model.module if isinstance(model, torch.nn.DataParallel) else model
     actual_model.eval()
-    actual_model.to(device)
-
+    device = next(model.parameters()).device
+      
     all_predictions = []
     all_references = []
 
     test_bar = tqdm(test_dataloader, desc='[GENERATING PREDICTIONS]')
     for src_ids, tgt_ids in test_bar:
         batch = Batch(src_ids, tgt_ids, pad_idx, device=device)
-        
-        # Generate token IDs using the model's optimized KV-caching generate_summary
-        prediction_ids = actual_model.generate_summary(batch.src, batch.src_mask, bos_idx, eos_idx, pad_idx)
-        
-        # Decode token IDs to text
-        predictions = tokenizer.decode_batch(prediction_ids.cpu().tolist(), skip_special_tokens=True)
+        prediction = actual_model.generate_summary(batch.src, batch.src_mask, bos_idx, eos_idx, pad_idx)
+        prediction = tokenizer.decode_batch(prediction.cpu().tolist(), skip_special_tokens=True)
         references = tokenizer.decode_batch(batch.tgt_y.cpu().tolist(), skip_special_tokens=True)
-        
-        all_predictions.extend(predictions)
+        all_predictions.extend(prediction)
         all_references.extend(references)
-
-    # Load HuggingFace evaluate metrics
+        
+    print(all_predictions[0])
     metrics_list = [
         evaluate.load('rouge'),
         evaluate.load('bleu'),
@@ -40,7 +34,7 @@ def evaluate_model(model, test_dataloader, bos_idx, eos_idx, pad_idx, tokenizer,
     final_results = {}
 
     for metric in metrics_list:
-        print(f"Computing: {metric.name.upper()}...")
+        print(f"{metric.name.upper()}")
 
         if metric.name in ["bertscore", "bert_score"]:
             raw_bert = metric.compute(predictions=all_predictions, references=all_references, lang="vi")
@@ -76,7 +70,7 @@ def main():
     args = parser.parse_args()
 
     # Load tokenizer
-    tokenizer = load_tokenizer(args.tokenizer_path)
+    tokenizer = load_tokenizer(text_list=None, save_path=args.tokenizer_path)
     pad_idx = tokenizer.token_to_id('<PAD>')
     bos_idx = tokenizer.token_to_id('<BOS>')
     eos_idx = tokenizer.token_to_id('<EOS>')
@@ -99,10 +93,8 @@ def main():
     test_df = test_df.dropna()
     if 'article_ids' not in test_df.columns:
         print("Dataset not pre-tokenized. Tokenizing now...")
-        test_df['article'] = test_df['article'].apply(lambda x: tokenizer.encode(x).tokens)
-        test_df['summary'] = test_df['summary'].apply(lambda x: tokenizer.encode(x).tokens)
-        test_df['article_ids'] = test_df['article'].apply(lambda x: tokenizer.encode(x).ids)
-        test_df['summary_ids'] = test_df['summary'].apply(lambda x: tokenizer.encode(x).ids)
+        test_df['article_ids'] = test_df['article'].apply(lambda x: tokenizer.encode(str(x)).ids)
+        test_df['summary_ids'] = test_df['summary'].apply(lambda x: tokenizer.encode(str(x)).ids)
 
     test_dataset = SummarizationDataset(test_df)
 
@@ -130,7 +122,7 @@ def main():
         d_ff=config.D_FF,
         h=config.H,
         N=config.N,
-        vocab_size=tokenizer.get_vocab_size(),
+        vocab_size=config.VOCAB_SIZE,
         dropout=config.DROPOUT
     )
 
@@ -156,8 +148,7 @@ def main():
         bos_idx=bos_idx,
         eos_idx=eos_idx,
         pad_idx=pad_idx,
-        tokenizer=tokenizer,
-        device=config.DEVICE
+        tokenizer=tokenizer
     )
 
     print("\nEvaluation Results\n")

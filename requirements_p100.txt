@@ -5,13 +5,16 @@
 --extra-index-url https://download.pytorch.org/whl/cu118
 
 torch==2.2.2+cu118
+torchvision==0.17.2+cu118
 torchinfo
 underthesea
-tokenizers
+transformers>=4.0.0
+tokenizers>=0.14.0
 pandarallel
 pyarrow
 evaluate
 rouge_score
+git+https://github.com/Tiiiger/bert_score.git
 pyngrok
 tqdm
 pandas

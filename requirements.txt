@@ -1,11 +1,13 @@
 torch>=2.0.0
 torchinfo
 underthesea
-tokenizers
+transformers>=4.0.0
+tokenizers>=0.14.0
 pandarallel
 pyarrow
 evaluate
 rouge_score
+git+https://github.com/Tiiiger/bert_score.git
 pyngrok
 tqdm
 pandas
