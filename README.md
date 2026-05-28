@@ -94,8 +94,8 @@ make test
 Run the resumable training script via command line:
 ```bash
 python -m transformer.train.train \
-  --train_path /path/to/train_compounded.parquet \
-  --val_path /path/to/val_compounded.parquet \
+  --train_compounded_path /path/to/train_compounded.parquet \
+  --val_compounded_path /path/to/val_compounded.parquet \
   --tokenizer_path train_summarization_tokenizer.json
 ```
 
@@ -103,7 +103,7 @@ python -m transformer.train.train \
 Evaluate your checkpoints using the high-speed KV-caching decoder to compute ROUGE, BLEU, and BERTScore:
 ```bash
 python -m transformer.evaluate.metrics \
-  --test_path /path/to/test_compounded.parquet \
+  --test_path /path/to/test.parquet \
   --tokenizer_path train_summarization_tokenizer.json \
   --checkpoint_path checkpoints/best_checkpoint.pt
 ```

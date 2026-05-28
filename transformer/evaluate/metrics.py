@@ -63,7 +63,7 @@ def main():
     from transformer.train import config
 
     parser = argparse.ArgumentParser(description="Evaluate custom Transformer model")
-    parser.add_argument("--test_path", type=str, required=True, help="Path to tokenized validation parquet dataset")
+    parser.add_argument("--test_path", type=str, help="Path to tokenized validation parquet dataset")
     parser.add_argument("--test_compounded_path", type=str, help="Path to tokenized compounded test dataset")
     parser.add_argument("--tokenizer_path", type=str, default="train_summarization_tokenizer.json", help="Path to BPE tokenizer JSON file")
     parser.add_argument("--checkpoint_path", type=str, default="checkpoints/best_checkpoint.pt", help="Path to best model checkpoint")
@@ -79,7 +79,7 @@ def main():
     if args.test_compounded_path and os.path.exists(args.test_compounded_path):
         print(f"Loading cached train dataset from {args.test_compounded_path}")
         test_df = pd.read_parquet(args.test_compounded_path)
-    else:
+    elif args.test_path:
         print(f"Loading raw train dataset from {args.test_path} and segmenting text...")
         test_df = pd.read_parquet(args.test_path)
         test_df = test_df.dropna()
@@ -88,7 +88,9 @@ def main():
         if args.test_compounded_path:
             print(f"Caching compounded train dataset to {args.test_compounded_path}")
             test_df.to_parquet(args.test_compounded_path)
-    
+    else:
+        raise ValueError("No test data provided")
+
     # Dropna and make sure column exists
     test_df = test_df.dropna()
     if 'article_ids' not in test_df.columns:

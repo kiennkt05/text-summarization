@@ -158,8 +158,8 @@ def main():
     """
     import argparse
     parser = argparse.ArgumentParser(description="Train custom Transformer from scratch")
-    parser.add_argument("--train_path", type=str, required=True, help="Path to tokenized train parquet dataset")
-    parser.add_argument("--val_path", type=str, required=True, help="Path to tokenized validation parquet dataset")
+    parser.add_argument("--train_path", type=str, help="Path to tokenized train parquet dataset")
+    parser.add_argument("--val_path", type=str, help="Path to tokenized validation parquet dataset")
     parser.add_argument("--train_compounded_path", type=str, default=None, help="Optional path to save/load segmented train parquet")
     parser.add_argument("--val_compounded_path", type=str, default=None, help="Optional path to save/load segmented validation parquet")
     parser.add_argument("--tokenizer_path", type=str, default="train_summarization_tokenizer.json", help="Path to BPE tokenizer JSON file")
@@ -176,7 +176,7 @@ def main():
     if args.train_compounded_path and os.path.exists(args.train_compounded_path):
         print(f"Loading cached train dataset from {args.train_compounded_path}")
         train_df = pd.read_parquet(args.train_compounded_path)
-    else:
+    elif args.train_path:
         print(f"Loading raw train dataset from {args.train_path} and segmenting text...")
         train_df = pd.read_parquet(args.train_path)
         train_df = train_df.dropna()
@@ -185,12 +185,14 @@ def main():
         if args.train_compounded_path:
             print(f"Caching compounded train dataset to {args.train_compounded_path}")
             train_df.to_parquet(args.train_compounded_path)
-
+    else:
+        raise ValueError("No train data provided")
+    
     # Optional compounded-parquet caching for validation dataset
     if args.val_compounded_path and os.path.exists(args.val_compounded_path):
         print(f"Loading cached validation dataset from {args.val_compounded_path}")
         val_df = pd.read_parquet(args.val_compounded_path)
-    else:
+    elif args.val_path:
         print(f"Loading raw validation dataset from {args.val_path} and segmenting text...")
         val_df = pd.read_parquet(args.val_path)
         val_df = val_df.dropna()
@@ -199,6 +201,8 @@ def main():
         if args.val_compounded_path:
             print(f"Caching compounded validation dataset to {args.val_compounded_path}")
             val_df.to_parquet(args.val_compounded_path)
+    else:
+        raise ValueError("No validation data provided")
 
     train_df = train_df.dropna()
     val_df = val_df.dropna()
