@@ -17,8 +17,8 @@ class LayerNorm(nn.Module):
 
     def forward(self, x):
         mean = torch.mean(x, dim=-1, keepdim=True)
-        std = torch.std(x, dim=-1, keepdim=True)
-        return self.a_2 * (x - mean) / (std + self.eps) + self.b_2
+        var = torch.var(x, dim=-1, keepdim=True, unbiased=False)
+        return self.a_2 * (x - mean) / torch.sqrt(var + self.eps) + self.b_2
 
 class ResidualConnection(nn.Module):
     """
