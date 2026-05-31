@@ -1,5 +1,6 @@
 import torch
 import evaluate
+import json
 from tqdm import tqdm
 from transformer.model.transformer import Batch
 from transformer.evaluate.inference import generate_summary
@@ -46,6 +47,13 @@ def evaluate_model(model, test_dataloader, bos_idx, eos_idx, pad_idx, tokenizer)
         else:
             final_results[metric.name] = metric.compute(predictions=all_predictions, references=all_references)
 
+    with open("outputs/results.json", "w", encoding="utf-8") as f:
+        # Saves both lists neatly paired in a single file
+        json.dump({
+            "predictions": all_predictions, 
+            "references": all_references
+        }, f, ensure_ascii=False, indent=2)
+            
     return final_results
 
 def main():

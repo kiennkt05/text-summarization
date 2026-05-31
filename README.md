@@ -107,3 +107,27 @@ python -m transformer.evaluate.metrics \
   --tokenizer_path train_summarization_tokenizer.json \
   --checkpoint_path checkpoints/best_checkpoint.pt
 ```
+
+### 5. Fine-Tuning the Pretrained Model (PTM)
+Run the Unsloth LoRA fine-tuning script via command line:
+```bash
+python -m PTM.finetune.finetune \
+  --train_path /path/to/train_dataset.parquet \
+  --save_path outputs_ptm/lora_model
+```
+
+### 6. Evaluating the Pretrained Model
+Evaluate your LoRA checkpoints on a test dataset to compute ROUGE, BLEU, and BERTScore using native 2x faster Unsloth inference:
+```bash
+python -m PTM.evaluate.generate \
+  --test_path /path/to/test.parquet \
+  --model_path outputs_ptm/lora_model
+```
+*(Note: If `--model_path` is omitted or invalid, it will automatically fall back to evaluating the original pretrained model.)*
+
+To generate a summary for a single text, replace `--test_path` with `--text`:
+```bash
+python -m PTM.evaluate.generate \
+  --model_path outputs_ptm/lora_model \
+  --text "Văn bản tiếng Việt cần tóm tắt..."
+```
