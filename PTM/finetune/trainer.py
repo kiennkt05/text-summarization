@@ -3,7 +3,7 @@ from transformers import TrainingArguments
 from unsloth import is_bfloat16_supported
 import PTM.model.config as config
 
-def get_trainer(model, tokenizer, train_dataset):
+def get_trainer(model, tokenizer, train_dataset, eval_dataset=None, batch_size=2, grad_accum=4):
     """
     Initializes and returns the SFTTrainer.
     """
@@ -11,12 +11,13 @@ def get_trainer(model, tokenizer, train_dataset):
         model = model,
         tokenizer = tokenizer,
         train_dataset = train_dataset,
+        eval_dataset = eval_dataset,
         dataset_text_field = "text",
         max_seq_length = config.MAX_SEQ_LENGTH,
         dataset_num_proc = 2,
         args = TrainingArguments(
-            per_device_train_batch_size = 2,
-            gradient_accumulation_steps = 4,
+            per_device_train_batch_size = batch_size,
+            gradient_accumulation_steps = grad_accum,
             
             # Use num_train_epochs = 1, warmup_ratio for full training runs!
             warmup_steps = 5,
@@ -32,6 +33,12 @@ def get_trainer(model, tokenizer, train_dataset):
             seed = config.SEED,
             output_dir = config.OUTPUT_DIR,
             report_to = "none", # Use this for WandB etc
+            evaluation_strategy = "steps" if eval_dataset else "no",
+            eval_steps = 10 if eval_dataset else None,
+            save_strategy = "steps" if eval_dataset else "no",
+            save_steps = 10 if eval_dataset else None,
+            load_best_model_at_end = True if eval_dataset else False,
+            metric_for_best_model = "loss" if eval_dataset else None,
         ),
     )
     return trainer

@@ -113,6 +113,7 @@ Run the Unsloth LoRA fine-tuning script via command line:
 ```bash
 python -m PTM.finetune.finetune \
   --train_path /path/to/train_dataset.parquet \
+  --val_path /path/to/val_dataset.parquet \
   --save_path outputs_ptm/lora_model
 ```
 
