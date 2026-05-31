@@ -1,3 +1,6 @@
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"
 import argparse
 from PTM.model.model_loader import load_model_and_tokenizer
 from PTM.finetune.peft_utils import apply_lora, save_model_adapters
@@ -11,6 +14,13 @@ def main():
     parser.add_argument("--save_path", type=str, default="outputs_ptm/lora_model", help="Path to save the LoRA adapters")
     parser.add_argument("--batch_size", type=int, default=2, help="Per device train batch size")
     parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
+    parser.add_argument("--warmup_steps", type=int, default=5, help="Warmup steps")
+    parser.add_argument("--max_steps", type=int, default=60, help="Max training steps (overrides epochs if > 0)")
+    parser.add_argument("--num_train_epochs", type=int, default=1, help="Number of training epochs")
+    parser.add_argument("--learning_rate", type=float, default=2e-4, help="Learning rate")
+    parser.add_argument("--logging_steps", type=int, default=1, help="Logging steps")
+    parser.add_argument("--weight_decay", type=float, default=0.01, help="Weight decay")
+    parser.add_argument("--eval_steps", type=int, default=10, help="Evaluation and saving steps")
     args = parser.parse_args()
 
     print("Loading model and tokenizer...")
@@ -28,7 +38,18 @@ def main():
         val_dataset = load_and_prepare_dataset(args.val_path, tokenizer)
 
     print("Initializing trainer...")
-    trainer = get_trainer(model, tokenizer, train_dataset, val_dataset, batch_size=args.batch_size, grad_accum=args.grad_accum)
+    trainer = get_trainer(
+        model, tokenizer, train_dataset, val_dataset,
+        batch_size=args.batch_size, 
+        grad_accum=args.grad_accum,
+        warmup_steps=args.warmup_steps,
+        max_steps=args.max_steps,
+        num_train_epochs=args.num_train_epochs,
+        learning_rate=args.learning_rate,
+        logging_steps=args.logging_steps,
+        weight_decay=args.weight_decay,
+        eval_steps=args.eval_steps
+    )
 
     print("Starting training...")
     trainer_stats = trainer.train()
