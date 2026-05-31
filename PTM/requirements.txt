@@ -1,0 +1,24 @@
+# PTM Fine-Tuning Dependencies
+
+# Core PyTorch (with CUDA 12.1 optimizations as seen in the notebook)
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
+torchaudio
+xformers
+
+# Unsloth for 2x faster fine-tuning
+unsloth
+
+# Hugging Face ecosystem (Notebook suggests latest git versions for bug fixes)
+git+https://github.com/huggingface/transformers.git
+git+https://github.com/huggingface/trl.git
+datasets
+peft
+accelerate
+bitsandbytes
+
+# Evaluation & Utilities
+evaluate
+pandas
+tqdm
