@@ -123,7 +123,11 @@ def evaluate_dataset(model, tokenizer, test_path, batch_size=8):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate PTM or Generate Summary")
-    parser.add_argument("--model_path", type=str, default=None, help="Path to saved LoRA model. If not provided, uses the original pretrained model.")
+    parser.add_argument("--model_name", type=str, default=config.MODEL_NAME, help="Name of the model to fine-tune")
+    parser.add_argument("--max_seq_length", type=int, default=config.MAX_SEQ_LENGTH, help="Max sequence length")
+    parser.add_argument("--dtype", type=str, default=config.DTYPE, help="Data type")
+    parser.add_argument("--load_in_4bit", type=bool, default=config.LOAD_IN_4BIT, help="Load in 4bit")
+    parser.add_argument("--model_path", type=str, default=f"{config.OUTPUT_DIR}/lora_model", help="Path to saved LoRA model. If not provided, uses the original pretrained model.")
     parser.add_argument("--test_path", type=str, default=None, help="Path to test parquet dataset for evaluation")
     parser.add_argument("--text", type=str, default=None, help="Text to summarize (single inference)")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size for dataset evaluation")
@@ -132,14 +136,14 @@ if __name__ == "__main__":
     if args.test_path is None and args.text is None:
         raise ValueError("Must provide either --test_path for evaluation or --text for single inference.")
     
-    model_name_to_load = args.model_path if args.model_path and os.path.exists(args.model_path) else config.MODEL_NAME
+    model_name_to_load = args.model_path if args.model_path and os.path.exists(args.model_path) else args.model_name
     print(f"Loading model: {model_name_to_load}")
     
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = model_name_to_load,
-        max_seq_length = config.MAX_SEQ_LENGTH,
-        dtype = config.DTYPE,
-        load_in_4bit = config.LOAD_IN_4BIT,
+        max_seq_length = args.max_seq_length,
+        dtype = args.dtype,
+        load_in_4bit = args.load_in_4bit,
     )
     
     if args.test_path:

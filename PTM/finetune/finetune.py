@@ -32,7 +32,7 @@ def main():
     args = parser.parse_args()
 
     print("Loading model and tokenizer...")
-    model, tokenizer = load_model_and_tokenizer(args.model_name)
+    model, tokenizer = load_model_and_tokenizer(args)
 
     print("Applying LoRA adapters...")
     model = apply_lora(model)
