@@ -132,3 +132,28 @@ python -m PTM.evaluate.generate \
   --model_path outputs_ptm/lora_model \
   --text "Văn bản tiếng Việt cần tóm tắt..."
 ```
+
+### 7. Fine-Tuning with VeRA (PTM_vera)
+Vector-based Random Matrix Adaptation (VeRA) is a highly parameter-efficient alternative to LoRA. To run the VeRA fine-tuning script:
+```bash
+python -m PTM_vera.finetune.finetune \
+  --train_path /path/to/train_dataset.parquet \
+  --val_path /path/to/val_dataset.parquet \
+  --save_path outputs_ptm/vera_model
+```
+
+### 8. Evaluating the VeRA Model
+Evaluate your VeRA checkpoints on a test dataset:
+```bash
+python -m PTM_vera.evaluate.generate \
+  --test_path /path/to/test.parquet \
+  --model_path outputs_ptm/vera_model
+```
+*(Note: If `--model_path` is omitted or invalid, it will automatically fall back to evaluating the original pretrained model.)*
+
+To generate a summary for a single text, replace `--test_path` with `--text`:
+```bash
+python -m PTM_vera.evaluate.generate \
+  --model_path outputs_ptm/vera_model \
+  --text "Văn bản tiếng Việt cần tóm tắt..."
+```
