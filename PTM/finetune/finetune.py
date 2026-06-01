@@ -19,7 +19,8 @@ def main():
     parser.add_argument("--train_path", type=str, required=True, help="Path to training parquet dataset")
     parser.add_argument("--val_path", type=str, default=None, help="Path to validation parquet dataset")
     parser.add_argument("--save_path", type=str, default=f"{config.OUTPUT_DIR}/lora_model", help="Path to save the LoRA adapters")
-    parser.add_argument("--batch_size", type=int, default=2, help="Per device train batch size")
+    parser.add_argument("--train_batch_size", type=int, default=2, help="Per device train batch size")
+    parser.add_argument("--eval_batch_size", type=int, default=2, help="Per device eval batch size")
     parser.add_argument("--grad_accum", type=int, default=4, help="Gradient accumulation steps")
     parser.add_argument("--warmup_steps", type=int, default=5, help="Warmup steps")
     parser.add_argument("--max_steps", type=int, default=60, help="Max training steps (overrides epochs if > 0)")
@@ -45,18 +46,7 @@ def main():
         val_dataset = load_and_prepare_dataset(args.val_path, tokenizer)
 
     print("Initializing trainer...")
-    trainer = get_trainer(
-        model, tokenizer, train_dataset, val_dataset,
-        batch_size=args.batch_size, 
-        grad_accum=args.grad_accum,
-        warmup_steps=args.warmup_steps,
-        max_steps=args.max_steps,
-        num_train_epochs=args.num_train_epochs,
-        learning_rate=args.learning_rate,
-        logging_steps=args.logging_steps,
-        weight_decay=args.weight_decay,
-        eval_steps=args.eval_steps
-    )
+    trainer = get_trainer(args, model, tokenizer, train_dataset, val_dataset)
 
     print("Starting training...")
     trainer_stats = trainer.train()

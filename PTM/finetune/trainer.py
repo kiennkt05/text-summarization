@@ -18,11 +18,10 @@ def get_trainer(
         max_seq_length = args.max_seq_length,
         dataset_num_proc = 2,
         args = TrainingArguments(
-            per_device_train_batch_size = args.batch_size,
-            per_device_eval_batch_size = args.batch_size,
+            per_device_train_batch_size = args.train_batch_size,
+            per_device_eval_batch_size = args.eval_batch_size,
             gradient_accumulation_steps = args.grad_accum,
             gradient_checkpointing = True,
-            
             warmup_steps = args.warmup_steps,
             max_steps = args.max_steps,
             num_train_epochs = args.num_train_epochs,
