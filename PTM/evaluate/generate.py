@@ -9,7 +9,7 @@ import PTM.model.config as config
 from PTM.evaluate.rouge_eval import compute_rouge_and_bleu
 from PTM.evaluate.bertscore import compute_bertscore
 
-def generate_summary(model, tokenizer, text, stream=True):
+def generate_summary(model, tokenizer, text, max_new_tokens=128, stream=True):
     """
     Generates a summary for a given text using the fine-tuned model.
     """
@@ -35,7 +35,7 @@ Tóm tắt văn bản sau đây.
             input_ids=inputs.input_ids, 
             attention_mask=inputs.attention_mask,
             streamer=text_streamer, 
-            max_new_tokens=256, 
+            max_new_tokens=max_new_tokens, 
             pad_token_id=tokenizer.eos_token_id
         )
         return ""
@@ -43,7 +43,7 @@ Tóm tắt văn bản sau đây.
         outputs = model.generate(
             input_ids=inputs.input_ids, 
             attention_mask=inputs.attention_mask,
-            max_new_tokens=256, 
+            max_new_tokens=max_new_tokens, 
             use_cache=True, 
             pad_token_id=tokenizer.eos_token_id
         )
@@ -51,7 +51,7 @@ Tóm tắt văn bản sau đây.
         output_text = tokenizer.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)[0]
         return output_text
 
-def generate_summary_batch(model, tokenizer, texts):
+def generate_summary_batch(model, tokenizer, texts, max_new_tokens=128):
     """
     Generates summaries for a batch of texts using the fine-tuned model.
     """
@@ -77,7 +77,7 @@ Tóm tắt văn bản sau đây.
     outputs = model.generate(
         input_ids=inputs.input_ids, 
         attention_mask=inputs.attention_mask,
-        max_new_tokens=256, 
+        max_new_tokens=max_new_tokens, 
         use_cache=True, 
         pad_token_id=tokenizer.eos_token_id
     )
@@ -87,7 +87,7 @@ Tóm tắt văn bản sau đây.
     output_texts = tokenizer.batch_decode(outputs[:, prompt_lengths:], skip_special_tokens=True)
     return output_texts
 
-def evaluate_dataset(model, tokenizer, test_path, batch_size=8):
+def evaluate_dataset(model, tokenizer, test_path, batch_size=8, max_new_tokens=128):
     print(f"Loading test dataset from {test_path}...")
     df = pd.read_parquet(test_path)
     df = df.dropna(subset=['article', 'summary'])
@@ -99,7 +99,7 @@ def evaluate_dataset(model, tokenizer, test_path, batch_size=8):
     print("Generating predictions in batches...")
     for i in tqdm(range(0, len(articles), batch_size)):
         batch_articles = articles[i:i+batch_size]
-        batch_preds = generate_summary_batch(model, tokenizer, batch_articles)
+        batch_preds = generate_summary_batch(model, tokenizer, batch_articles, max_new_tokens)
         predictions.extend(batch_preds)
         
     print("\nComputing metrics...")
@@ -125,6 +125,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate PTM or Generate Summary")
     parser.add_argument("--model_name", type=str, default=config.MODEL_NAME, help="Name of the model to fine-tune")
     parser.add_argument("--max_seq_length", type=int, default=config.MAX_SEQ_LENGTH, help="Max sequence length")
+    parser.add_argument("--max_new_tokens", type=int, default=config.MAX_NEW_TOKENS, help="Max new tokens")
     parser.add_argument("--dtype", type=str, default=config.DTYPE, help="Data type")
     parser.add_argument("--load_in_4bit", type=bool, default=config.LOAD_IN_4BIT, help="Load in 4bit")
     parser.add_argument("--model_path", type=str, default=f"{config.OUTPUT_DIR}/lora_model", help="Path to saved LoRA model. If not provided, uses the original pretrained model.")
@@ -137,18 +138,40 @@ if __name__ == "__main__":
         raise ValueError("Must provide either --test_path for evaluation or --text for single inference.")
     
     model_name_to_load = args.model_path if args.model_path and os.path.exists(args.model_path) else args.model_name
-    print(f"Loading model: {model_name_to_load}")
     
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = model_name_to_load,
-        max_seq_length = args.max_seq_length,
-        dtype = args.dtype,
-        load_in_4bit = args.load_in_4bit,
-    )
+    is_non_lora_peft = False
+    if args.model_path and os.path.exists(os.path.join(args.model_path, "adapter_config.json")):
+        try:
+            with open(os.path.join(args.model_path, "adapter_config.json"), "r") as f:
+                adapter_config = json.load(f)
+                if adapter_config.get("peft_type") != "LORA":
+                    is_non_lora_peft = True
+        except Exception:
+            pass
+
+    if is_non_lora_peft:
+        print(f"Detected non-LoRA PEFT model. Loading base model: {args.model_name}")
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name = args.model_name,
+            max_seq_length = args.max_seq_length,
+            dtype = args.dtype,
+            load_in_4bit = args.load_in_4bit,
+        )
+        from peft import PeftModel
+        print(f"Loading PEFT adapters from {args.model_path}...")
+        model = PeftModel.from_pretrained(model, args.model_path)
+    else:
+        print(f"Loading model: {model_name_to_load}")
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name = model_name_to_load,
+            max_seq_length = args.max_seq_length,
+            dtype = args.dtype,
+            load_in_4bit = args.load_in_4bit,
+        )
     
     if args.test_path:
-        evaluate_dataset(model, tokenizer, args.test_path, batch_size=args.batch_size)
+        evaluate_dataset(model, tokenizer, args.test_path, batch_size=args.batch_size, max_new_tokens=args.max_new_tokens)
     elif args.text:
         print("\n--- Summary ---")
-        generate_summary(model, tokenizer, args.text, stream=True)
+        generate_summary(model, tokenizer, args.text, max_new_tokens=args.max_new_tokens, stream=True)
         print("\n---------------")

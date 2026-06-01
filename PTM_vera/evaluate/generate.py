@@ -9,7 +9,7 @@ import PTM_vera.model.config as config
 from PTM_vera.evaluate.rouge_eval import compute_rouge_and_bleu
 from PTM_vera.evaluate.bertscore import compute_bertscore
 
-def generate_summary(model, tokenizer, text, stream=True):
+def generate_summary(model, tokenizer, text, max_new_tokens=128, stream=True):
     """
     Generates a summary for a given text using the fine-tuned model.
     """
@@ -35,7 +35,7 @@ Tóm tắt văn bản sau đây.
             input_ids=inputs.input_ids, 
             attention_mask=inputs.attention_mask,
             streamer=text_streamer, 
-            max_new_tokens=256, 
+            max_new_tokens=max_new_tokens, 
             pad_token_id=tokenizer.eos_token_id
         )
         return ""
@@ -43,7 +43,7 @@ Tóm tắt văn bản sau đây.
         outputs = model.generate(
             input_ids=inputs.input_ids, 
             attention_mask=inputs.attention_mask,
-            max_new_tokens=256, 
+            max_new_tokens=max_new_tokens, 
             use_cache=True, 
             pad_token_id=tokenizer.eos_token_id
         )
@@ -51,7 +51,7 @@ Tóm tắt văn bản sau đây.
         output_text = tokenizer.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)[0]
         return output_text
 
-def generate_summary_batch(model, tokenizer, texts):
+def generate_summary_batch(model, tokenizer, texts, max_new_tokens=128):
     """
     Generates summaries for a batch of texts using the fine-tuned model.
     """
@@ -77,7 +77,7 @@ Tóm tắt văn bản sau đây.
     outputs = model.generate(
         input_ids=inputs.input_ids, 
         attention_mask=inputs.attention_mask,
-        max_new_tokens=256, 
+        max_new_tokens=max_new_tokens, 
         use_cache=True, 
         pad_token_id=tokenizer.eos_token_id
     )
@@ -87,7 +87,7 @@ Tóm tắt văn bản sau đây.
     output_texts = tokenizer.batch_decode(outputs[:, prompt_lengths:], skip_special_tokens=True)
     return output_texts
 
-def evaluate_dataset(model, tokenizer, test_path, batch_size=8):
+def evaluate_dataset(model, tokenizer, test_path, batch_size=8, max_new_tokens=128):
     print(f"Loading test dataset from {test_path}...")
     df = pd.read_parquet(test_path)
     df = df.dropna(subset=['article', 'summary'])
@@ -99,7 +99,7 @@ def evaluate_dataset(model, tokenizer, test_path, batch_size=8):
     print("Generating predictions in batches...")
     for i in tqdm(range(0, len(articles), batch_size)):
         batch_articles = articles[i:i+batch_size]
-        batch_preds = generate_summary_batch(model, tokenizer, batch_articles)
+        batch_preds = generate_summary_batch(model, tokenizer, batch_articles, max_new_tokens)
         predictions.extend(batch_preds)
         
     print("\nComputing metrics...")
@@ -125,6 +125,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate PTM or Generate Summary")
     parser.add_argument("--model_name", type=str, default=config.MODEL_NAME, help="Name of the model to fine-tune")
     parser.add_argument("--max_seq_length", type=int, default=config.MAX_SEQ_LENGTH, help="Max sequence length")
+    parser.add_argument("--max_new_tokens", type=int, default=config.MAX_NEW_TOKENS, help="Max new tokens")
     parser.add_argument("--dtype", type=str, default=config.DTYPE, help="Data type")
     parser.add_argument("--load_in_4bit", type=bool, default=config.LOAD_IN_4BIT, help="Load in 4bit")
     parser.add_argument("--model_path", type=str, default=f"{config.OUTPUT_DIR}/vera_model", help="Path to saved VeRA model. If not provided, uses the original pretrained model.")
@@ -157,8 +158,8 @@ if __name__ == "__main__":
         )
     
     if args.test_path:
-        evaluate_dataset(model, tokenizer, args.test_path, batch_size=args.batch_size)
+        evaluate_dataset(model, tokenizer, args.test_path, batch_size=args.batch_size, max_new_tokens=args.max_new_tokens)
     elif args.text:
         print("\n--- Summary ---")
-        generate_summary(model, tokenizer, args.text, stream=True)
+        generate_summary(model, tokenizer, args.text, max_new_tokens=args.max_new_tokens, stream=True)
         print("\n---------------")
