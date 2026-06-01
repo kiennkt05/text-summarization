@@ -138,36 +138,14 @@ if __name__ == "__main__":
         raise ValueError("Must provide either --test_path for evaluation or --text for single inference.")
     
     model_name_to_load = args.model_path if args.model_path and os.path.exists(args.model_path) else args.model_name
-    
-    is_non_lora_peft = False
-    if args.model_path and os.path.exists(os.path.join(args.model_path, "adapter_config.json")):
-        try:
-            with open(os.path.join(args.model_path, "adapter_config.json"), "r") as f:
-                adapter_config = json.load(f)
-                if adapter_config.get("peft_type") != "LORA":
-                    is_non_lora_peft = True
-        except Exception:
-            pass
+    print(f"Loading model: {model_name_to_load}")
 
-    if is_non_lora_peft:
-        print(f"Detected non-LoRA PEFT model. Loading base model: {args.model_name}")
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name = args.model_name,
-            max_seq_length = args.max_seq_length,
-            dtype = args.dtype,
-            load_in_4bit = args.load_in_4bit,
-        )
-        from peft import PeftModel
-        print(f"Loading PEFT adapters from {args.model_path}...")
-        model = PeftModel.from_pretrained(model, args.model_path)
-    else:
-        print(f"Loading model: {model_name_to_load}")
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name = model_name_to_load,
-            max_seq_length = args.max_seq_length,
-            dtype = args.dtype,
-            load_in_4bit = args.load_in_4bit,
-        )
+    model, tokenizer = FastLanguageModel.from_pretrained(
+        model_name = model_name_to_load,
+        max_seq_length = args.max_seq_length,
+        dtype = args.dtype,
+        load_in_4bit = args.load_in_4bit,
+    )
     
     if args.test_path:
         evaluate_dataset(model, tokenizer, args.test_path, batch_size=args.batch_size, max_new_tokens=args.max_new_tokens)

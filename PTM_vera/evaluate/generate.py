@@ -13,7 +13,7 @@ def generate_summary(model, tokenizer, text, max_new_tokens=128, stream=True):
     """
     Generates a summary for a given text using the fine-tuned model.
     """
-    FastLanguageModel.for_inference(model) # Enable native 2x faster inference
+    # FastLanguageModel.for_inference(model) # Unsloth fast inference only supports LoRA, breaks VeRA
     
     alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 
@@ -55,7 +55,7 @@ def generate_summary_batch(model, tokenizer, texts, max_new_tokens=128):
     """
     Generates summaries for a batch of texts using the fine-tuned model.
     """
-    FastLanguageModel.for_inference(model) # Enable native 2x faster inference
+    # FastLanguageModel.for_inference(model) # Unsloth fast inference only supports LoRA, breaks VeRA
     
     alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
 
@@ -138,12 +138,30 @@ if __name__ == "__main__":
         raise ValueError("Must provide either --test_path for evaluation or --text for single inference.")
     
     if args.model_path and os.path.exists(args.model_path):
-        print(f"Loading base model: {args.model_name}")
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name = args.model_name,
-            max_seq_length = args.max_seq_length,
-            dtype = args.dtype,
-            load_in_4bit = args.load_in_4bit,
+        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+        import torch
+        print(f"Loading base model using standard transformers: {args.model_name}")
+        
+        torch_dtype = "auto"
+        if args.dtype == "float16": torch_dtype = torch.float16
+        elif args.dtype == "bfloat16": torch_dtype = torch.bfloat16
+        
+        quantization_config = None
+        if args.load_in_4bit:
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch_dtype if torch_dtype != "auto" else torch.float16
+            )
+            
+        tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name,
+            quantization_config=quantization_config,
+            device_map="auto",
+            torch_dtype=torch_dtype,
         )
         from peft import PeftModel
         print(f"Loading VeRA adapters from {args.model_path}...")
