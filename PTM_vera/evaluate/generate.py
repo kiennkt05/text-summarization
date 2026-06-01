@@ -35,7 +35,7 @@ Tóm tắt văn bản sau đây.
             input_ids=inputs.input_ids, 
             attention_mask=inputs.attention_mask,
             streamer=text_streamer, 
-            max_new_tokens=128, 
+            max_new_tokens=256, 
             pad_token_id=tokenizer.eos_token_id
         )
         return ""
@@ -43,7 +43,7 @@ Tóm tắt văn bản sau đây.
         outputs = model.generate(
             input_ids=inputs.input_ids, 
             attention_mask=inputs.attention_mask,
-            max_new_tokens=128, 
+            max_new_tokens=256, 
             use_cache=True, 
             pad_token_id=tokenizer.eos_token_id
         )
@@ -77,7 +77,7 @@ Tóm tắt văn bản sau đây.
     outputs = model.generate(
         input_ids=inputs.input_ids, 
         attention_mask=inputs.attention_mask,
-        max_new_tokens=128, 
+        max_new_tokens=256, 
         use_cache=True, 
         pad_token_id=tokenizer.eos_token_id
     )
