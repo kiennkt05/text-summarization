@@ -87,9 +87,9 @@ Tóm tắt văn bản sau đây.
     output_texts = tokenizer.batch_decode(outputs[:, prompt_lengths:], skip_special_tokens=True)
     return output_texts
 
-def evaluate_dataset(model, tokenizer, test_path, batch_size=8, max_new_tokens=128):
-    print(f"Loading test dataset from {test_path}...")
-    df = pd.read_parquet(test_path)
+def evaluate_dataset(model, tokenizer, args):
+    print(f"Loading test dataset from {args.test_path}...")
+    df = pd.read_parquet(args.test_path)
     df = df.dropna(subset=['article', 'summary'])
     
     predictions = []
@@ -97,9 +97,9 @@ def evaluate_dataset(model, tokenizer, test_path, batch_size=8, max_new_tokens=1
     articles = df['article'].tolist()
     
     print("Generating predictions in batches...")
-    for i in tqdm(range(0, len(articles), batch_size)):
-        batch_articles = articles[i:i+batch_size]
-        batch_preds = generate_summary_batch(model, tokenizer, batch_articles, max_new_tokens)
+    for i in tqdm(range(0, len(articles), args.batch_size)):
+        batch_articles = articles[i:i+args.batch_size]
+        batch_preds = generate_summary_batch(model, tokenizer, batch_articles, args.max_new_tokens)
         predictions.extend(batch_preds)
         
     print("\nComputing metrics...")
@@ -114,9 +114,11 @@ def evaluate_dataset(model, tokenizer, test_path, batch_size=8, max_new_tokens=1
     print(f"| BERTScore (F1) | {bert_res['bertscore']['f1']*100:.2f} |")
     
     # Save results
-    os.makedirs("outputs_ptm", exist_ok=True)
-    with open("outputs_ptm/results.json", "w", encoding="utf-8") as f:
+    os.makedirs(f"{args.result_dir}", exist_ok=True)
+    with open(f"{args.result_dir}/results.json", "w", encoding="utf-8") as f:
         json.dump({
+            "rouge_bleu_res": rouge_bleu_res,
+            "bert_res": bert_res,
             "predictions": predictions, 
             "references": references
         }, f, ensure_ascii=False, indent=2)
@@ -132,6 +134,7 @@ if __name__ == "__main__":
     parser.add_argument("--test_path", type=str, default=None, help="Path to test parquet dataset for evaluation")
     parser.add_argument("--text", type=str, default=None, help="Text to summarize (single inference)")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size for dataset evaluation")
+    parser.add_argument("--result_dir", type=str, default="outputs", help="Directory to save results")
     args = parser.parse_args()
     
     if args.test_path is None and args.text is None:
@@ -176,7 +179,7 @@ if __name__ == "__main__":
         )
     
     if args.test_path:
-        evaluate_dataset(model, tokenizer, args.test_path, batch_size=args.batch_size, max_new_tokens=args.max_new_tokens)
+        evaluate_dataset(model, tokenizer, args)
     elif args.text:
         print("\n--- Summary ---")
         generate_summary(model, tokenizer, args.text, max_new_tokens=args.max_new_tokens, stream=True)
