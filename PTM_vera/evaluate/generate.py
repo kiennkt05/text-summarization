@@ -117,6 +117,7 @@ def evaluate_dataset(model, tokenizer, args):
     os.makedirs(f"{args.result_dir}", exist_ok=True)
     with open(f"{args.result_dir}/results.json", "w", encoding="utf-8") as f:
         json.dump({
+            "model_path": args.model_path if os.path.exists(args.model_path) else args.model_name,
             "rouge_bleu_res": rouge_bleu_res,
             "bert_res": bert_res,
             "predictions": predictions, 
