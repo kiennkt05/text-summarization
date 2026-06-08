@@ -132,28 +132,36 @@ python -m PTM.evaluate.generate \
   --model_path outputs_ptm/lora_model \
   --text "Văn bản tiếng Việt cần tóm tắt..."
 ```
-
-### 7. Fine-Tuning with VeRA (PTM_vera)
-Vector-based Random Matrix Adaptation (VeRA) is a highly parameter-efficient alternative to LoRA. To run the VeRA fine-tuning script:
+### 7. Preparing Dataset for DPO
+Before running DPO, generate the RL dataset by scoring predictions with the custom reward function:
 ```bash
-python -m PTM_vera.finetune.finetune \
-  --train_path /path/to/train_dataset.parquet \
-  --val_path /path/to/val_dataset.parquet \
-  --save_path outputs_ptm/vera_model
+python -m PTM.finetune.prepare_rl_dataset \
+  --input_path /content/lora_train_results.json \
+  --full_output_path full_RL_dataset.parquet \
+  --worst_output_path RL_dataset.parquet \
+  --top_k_ratio 0.25
 ```
 
-### 8. Evaluating the VeRA Model
-Evaluate your VeRA checkpoints on a test dataset:
+### 8. Direct Preference Optimization (DPO) Fine-Tuning
+For further alignment using human/AI preferences, run the DPO fine-tuning script:
 ```bash
-python -m PTM_vera.evaluate.generate \
-  --test_path /path/to/test.parquet \
-  --model_path outputs_ptm/vera_model
+python -m PTM.finetune.dpo \
+  --model_name /kaggle/input/datasets/tkainguyen/qwen2-5-1-5blora/qwen2.5-0.5b \
+  --dataset_path RL_dataset.parquet \
+  --output_dir dpo_output \
+  --beta 0.1 \
+  --learning_rate 5e-6 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 8 \
+  --num_train_epochs 1 \
+  --disable_dropout
 ```
-*(Note: If `--model_path` is omitted or invalid, it will automatically fall back to evaluating the original pretrained model.)*
 
-To generate a summary for a single text, replace `--test_path` with `--text`:
+### 9. LLM as a Judge Evaluation
+To comprehensively evaluate multiple models side-by-side using Gemini as a judge (G-Eval approach), ensure you have set `GEMINI_API_KEY` in your `.env` file, then run:
 ```bash
-python -m PTM_vera.evaluate.generate \
-  --model_path outputs_ptm/vera_model \
-  --text "Văn bản tiếng Việt cần tóm tắt..."
+python -m PTM.evaluate.llm_as_judge \
+  --input_path /content/valid-sampled-predictions.parquet \
+  --output_path llm_judge_results.csv \
+  --model gemini-3.1-flash-lite
 ```
