@@ -9,16 +9,43 @@ import PTM.model.config as config
 from PTM.evaluate.rouge_eval import compute_rouge_and_bleu
 from PTM.evaluate.bertscore import compute_bertscore
 
-def generate_summary(model, tokenizer, text, max_new_tokens=128, stream=True):
+def generate_summary(model, tokenizer, text, oneshot_enabled, cot_enabled, max_new_tokens=128, stream=True):
     """
     Generates a summary for a given text using the fine-tuned model.
     """
     FastLanguageModel.for_inference(model) # Enable native 2x faster inference
     
-    alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
+    instruction = """Nhiệm vụ của bạn là đọc kỹ bài báo được cung cấp và viết một đoạn tóm tắt ngắn gọn, súc tích nhưng vẫn giữ được các thông điệp cốt lõi.
 
+Hãy áp dụng phương pháp tư duy từng bước (Chain-of-Thought) theo hướng dẫn sau:
+
+1. Phân tích ngữ cảnh: Đọc toàn bộ bài viết và xác định chủ đề chính.
+2. Trích xuất thông tin cốt lõi (5W1H):
+   - Ai/Cơ quan nào? (Who)
+   - Sự kiện/Vấn đề gì đang diễn ra? (What)
+   - Thời gian nào? (When)
+   - Ở đâu? (Where)
+   - Tại sao/Mục đích là gì? (Why/Goal)
+3. Lọc bỏ chi tiết phụ: Loại bỏ các số liệu quá chi tiết, trích dẫn trực tiếp dài dòng, hoặc các ví dụ nhỏ lẻ không làm thay đổi nội dung tổng thể.
+4. Tổng hợp và Viết tóm tắt: Kết nối các thông tin cốt lõi ở bước 2 thành một đoạn văn hoàn chỉnh, logic, dễ đọc (khoảng 2-3 câu).
+""" if cot_enabled else "Tóm tắt văn bản sau đây."
+
+    oneshot = """
+## Example
 ### Instruction:
 Tóm tắt văn bản sau đây.
+
+### Input:
+Gần 20 sự kiện được tổ chức trên toàn thành phố, kéo dài từ 19/4 đến 10/5. Theo Sở Du lịch Hà Nội, ngoài thu hút du khách, loạt sự kiện cũng là các gợi ý dành cho người dân thủ đô không đi chơi xa và muốn tham gia các hoạt động trong ngày. Một số hoạt động tiêu biểu gồm Lễ hội Du lịch Hà Nội 2024 với chủ đề 'Thăng Long - Hà Nội, Thủ đô quyến rũ'; Triển lãm Ngô Quyền - Anh hùng dân tộc kiệt xuất và Thăng Long hội tụ; Việt Nam - những chiến thắng làm thay đổi dòng chảy lịch sử thế giới hay Tái hiện lễ hội Cầu mưa dân tộc Lô Lô, tỉnh Cao Bằng, Lễ hội Tình yêu năm 2024. Bên cạnh đó, nhân dịp kỷ niệm ngày Giải phóng miền Nam, thống nhất đất nước 30/4 - Quốc tế Lao động 1/5 và Ngày sinh Chủ tịch Hồ Chí Minh 19/5, Sở phối hợp Ban Quản lý Lăng Chủ tịch hỗ trợ nước, sữa và bánh miễn phí phục vụ nhân dân, du khách đến viếng Lăng Bác. Hà Nội cũng có rất nhiều sản phẩm du lịch xanh được ra mắt và đẩy mạnh trong thời gian qua như trải nghiệm xe điện trong lòng phố cổ, tour xe đạp, các sản phẩm du lịch sinh thái và nghỉ dưỡng ở ngoại thành. Nghỉ lễ kéo dài 5 ngày kéo theo nhu cầu tham quan, di chuyển của người dân dự kiến tăng cao. Giám đốc Sở Du lịch Hà Nội, Đặng Hương Giang, cho biết đây là 'cơ hội lớn' cho ngành tăng sức hút với du khách. Sở đã chỉ đạo các bên liên quan rà soát, nâng cao chất lượng sản phẩm, dịch vụ du lịch để đáp ứng nhu cầu của du khách. Hà Nội kỳ vọng với nhiều hoạt động trong kỳ nghỉ lễ nêu trên, ngành du lịch sẽ phục vụ chuyên nghiệp, chu đáo, đáp ứng tốt nhất nhu cầu tham quan, giải trí, nghỉ ngơi của nhân dân và thu hút nhiều khách quốc tế ghé thăm. Phương Anh
+
+### Response:
+Hà Nội tổ chức gần 20 sự kiện từ 19/4 đến 10/5, bao gồm Lễ hội Du lịch Hà Nội 2024, các triển lãm và lễ hội văn hóa, nhằm thu hút cả du khách và người dân.  Song song đó, thành phố cũng đẩy mạnh các sản phẩm du lịch xanh và chuẩn bị chu đáo để đáp ứng nhu cầu tăng cao trong kỳ nghỉ lễ 5 ngày, kỳ vọng thu hút nhiều khách du lịch trong và ngoài nước.
+    """ if oneshot_enabled else ""
+
+    alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
+{}
+### Instruction:
+{}
 
 ### Input:
 {}
@@ -26,7 +53,7 @@ Tóm tắt văn bản sau đây.
 ### Response:
 {}"""
 
-    prompt = alpaca_prompt.format(text, "")
+    prompt = alpaca_prompt.format(oneshot, instruction, text, "")
     inputs = tokenizer([prompt], return_tensors="pt").to("cuda")
 
     if stream:
@@ -51,16 +78,43 @@ Tóm tắt văn bản sau đây.
         output_text = tokenizer.batch_decode(outputs[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)[0]
         return output_text
 
-def generate_summary_batch(model, tokenizer, texts, max_new_tokens=128):
+def generate_summary_batch(model, tokenizer, texts, oneshot_enabled, cot_enabled, max_new_tokens=128):
     """
     Generates summaries for a batch of texts using the fine-tuned model.
     """
     FastLanguageModel.for_inference(model) # Enable native 2x faster inference
     
-    alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
+    instruction = """Nhiệm vụ của bạn là đọc kỹ bài báo được cung cấp và viết một đoạn tóm tắt ngắn gọn, súc tích nhưng vẫn giữ được các thông điệp cốt lõi.
 
+Hãy áp dụng phương pháp tư duy từng bước (Chain-of-Thought) theo hướng dẫn sau:
+
+1. Phân tích ngữ cảnh: Đọc toàn bộ bài viết và xác định chủ đề chính.
+2. Trích xuất thông tin cốt lõi (5W1H):
+   - Ai/Cơ quan nào? (Who)
+   - Sự kiện/Vấn đề gì đang diễn ra? (What)
+   - Thời gian nào? (When)
+   - Ở đâu? (Where)
+   - Tại sao/Mục đích là gì? (Why/Goal)
+3. Lọc bỏ chi tiết phụ: Loại bỏ các số liệu quá chi tiết, trích dẫn trực tiếp dài dòng, hoặc các ví dụ nhỏ lẻ không làm thay đổi nội dung tổng thể.
+4. Tổng hợp và Viết tóm tắt: Kết nối các thông tin cốt lõi ở bước 2 thành một đoạn văn hoàn chỉnh, logic, dễ đọc (khoảng 2-3 câu).
+""" if cot_enabled else "Tóm tắt văn bản sau đây."
+
+    oneshot = """
+## Example
 ### Instruction:
 Tóm tắt văn bản sau đây.
+
+### Input:
+Gần 20 sự kiện được tổ chức trên toàn thành phố, kéo dài từ 19/4 đến 10/5. Theo Sở Du lịch Hà Nội, ngoài thu hút du khách, loạt sự kiện cũng là các gợi ý dành cho người dân thủ đô không đi chơi xa và muốn tham gia các hoạt động trong ngày. Một số hoạt động tiêu biểu gồm Lễ hội Du lịch Hà Nội 2024 với chủ đề 'Thăng Long - Hà Nội, Thủ đô quyến rũ'; Triển lãm Ngô Quyền - Anh hùng dân tộc kiệt xuất và Thăng Long hội tụ; Việt Nam - những chiến thắng làm thay đổi dòng chảy lịch sử thế giới hay Tái hiện lễ hội Cầu mưa dân tộc Lô Lô, tỉnh Cao Bằng, Lễ hội Tình yêu năm 2024. Bên cạnh đó, nhân dịp kỷ niệm ngày Giải phóng miền Nam, thống nhất đất nước 30/4 - Quốc tế Lao động 1/5 và Ngày sinh Chủ tịch Hồ Chí Minh 19/5, Sở phối hợp Ban Quản lý Lăng Chủ tịch hỗ trợ nước, sữa và bánh miễn phí phục vụ nhân dân, du khách đến viếng Lăng Bác. Hà Nội cũng có rất nhiều sản phẩm du lịch xanh được ra mắt và đẩy mạnh trong thời gian qua như trải nghiệm xe điện trong lòng phố cổ, tour xe đạp, các sản phẩm du lịch sinh thái và nghỉ dưỡng ở ngoại thành. Nghỉ lễ kéo dài 5 ngày kéo theo nhu cầu tham quan, di chuyển của người dân dự kiến tăng cao. Giám đốc Sở Du lịch Hà Nội, Đặng Hương Giang, cho biết đây là 'cơ hội lớn' cho ngành tăng sức hút với du khách. Sở đã chỉ đạo các bên liên quan rà soát, nâng cao chất lượng sản phẩm, dịch vụ du lịch để đáp ứng nhu cầu của du khách. Hà Nội kỳ vọng với nhiều hoạt động trong kỳ nghỉ lễ nêu trên, ngành du lịch sẽ phục vụ chuyên nghiệp, chu đáo, đáp ứng tốt nhất nhu cầu tham quan, giải trí, nghỉ ngơi của nhân dân và thu hút nhiều khách quốc tế ghé thăm. Phương Anh
+
+### Response:
+Hà Nội tổ chức gần 20 sự kiện từ 19/4 đến 10/5, bao gồm Lễ hội Du lịch Hà Nội 2024, các triển lãm và lễ hội văn hóa, nhằm thu hút cả du khách và người dân.  Song song đó, thành phố cũng đẩy mạnh các sản phẩm du lịch xanh và chuẩn bị chu đáo để đáp ứng nhu cầu tăng cao trong kỳ nghỉ lễ 5 ngày, kỳ vọng thu hút nhiều khách du lịch trong và ngoài nước.
+    """ if oneshot_enabled else ""
+
+    alpaca_prompt = """Below is an instruction that describes a task, paired with an input that provides further context. Write a response that appropriately completes the request.
+{}
+### Instruction:
+{}
 
 ### Input:
 {}
@@ -68,7 +122,7 @@ Tóm tắt văn bản sau đây.
 ### Response:
 {}"""
 
-    prompts = [alpaca_prompt.format(text, "") for text in texts]
+    prompts = [alpaca_prompt.format(oneshot, instruction, text, "") for text in texts]
     
     # Left padding is required for batched generation in causal LMs
     tokenizer.padding_side = "left"
@@ -99,7 +153,7 @@ def evaluate_dataset(model, tokenizer, args):
     print("Generating predictions in batches...")
     for i in tqdm(range(0, len(articles), args.batch_size)):
         batch_articles = articles[i:i+args.batch_size]
-        batch_preds = generate_summary_batch(model, tokenizer, batch_articles, args.max_new_tokens)
+        batch_preds = generate_summary_batch(model, tokenizer, batch_articles, args.oneshot_enabled, args.cot_enabled, args.max_new_tokens)
         predictions.extend(batch_preds)
         
     print("\nComputing metrics...")
@@ -127,6 +181,8 @@ def evaluate_dataset(model, tokenizer, args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate PTM or Generate Summary")
     parser.add_argument("--model_name", type=str, default=config.MODEL_NAME, help="Name of the model to fine-tune")
+    parser.add_argument("--oneshot_enabled", action="store_true", default=False, help="Enable oneshot")
+    parser.add_argument("--cot_enabled", action="store_true", default=False, help="Enable cot")
     parser.add_argument("--max_seq_length", type=int, default=config.MAX_SEQ_LENGTH, help="Max sequence length")
     parser.add_argument("--max_new_tokens", type=int, default=config.MAX_NEW_TOKENS, help="Max new tokens")
     parser.add_argument("--dtype", type=str, default=config.DTYPE, help="Data type")
@@ -155,5 +211,5 @@ if __name__ == "__main__":
         evaluate_dataset(model, tokenizer, args)
     elif args.text:
         print("\n--- Summary ---")
-        generate_summary(model, tokenizer, args.text, max_new_tokens=args.max_new_tokens, stream=True)
+        generate_summary(model, tokenizer, args.text, args.oneshot_enabled, args.cot_enabled, args.max_new_tokens, stream=True)
         print("\n---------------")
