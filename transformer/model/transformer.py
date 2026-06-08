@@ -57,9 +57,7 @@ class BaselineTransformer(nn.Module):
         device_type = device.type
         src_token = src_token.to(device)
         src_mask = src_mask.to(device)
-        from torch.amp import autocast
-        with autocast(device_type=device_type, dtype=torch.float16, enabled=(device_type == 'cuda')):
-            memory = self.encoder(src_token, src_mask)
+        memory = self.encoder(src_token, src_mask)
         
         batch_size = src_token.size(0)
         tgt_token = torch.full((batch_size, 1), bos_idx, dtype=torch.long, device=device)
@@ -68,9 +66,8 @@ class BaselineTransformer(nn.Module):
           
         for step in range(max_len):
             tgt_mask = None
-            with autocast(device_type=device_type, dtype=torch.float16, enabled=(device_type == 'cuda')):
-                input_token = tgt_token if step == 0 else tgt_token[:, -1:]
-                output, present_kvs = self.decoder(input_token, memory, src_mask, tgt_mask, past_kvs=past_kvs, use_cache=True, step=step)
+            input_token = tgt_token if step == 0 else tgt_token[:, -1:]
+            output, present_kvs = self.decoder(input_token, memory, src_mask, tgt_mask, past_kvs=past_kvs, use_cache=True, step=step)
         
             next_token_logits = output[:, -1, :]
             next_token = torch.argmax(next_token_logits, dim=-1).unsqueeze(-1)

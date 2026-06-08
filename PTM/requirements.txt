@@ -1,0 +1,32 @@
+# PTM Fine-Tuning Dependencies
+
+# Core PyTorch – already installed with CUDA 12.8
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.10.0
+torchvision==0.25.0
+torchaudio==2.10.0
+xformers>=0.0.29
+
+# Unsloth for 2x faster fine‑tuning
+unsloth[cu128]>=2026.3.0
+
+# Required by newer unsloth versions
+torchao>=0.13.0
+
+# Prevent protobuf downgrade (keep existing system version)
+protobuf>=4.25.8,<7
+
+# Hugging Face ecosystem – use stable versions compatible with unsloth
+# unsloth 2026.5.x requires transformers >=4.51.3, <=5.5.0
+transformers>=4.51.3,<=5.5.0
+trl>=0.14.0            # latest stable trl that works with transformers 5.5
+datasets
+peft>=0.11.0
+accelerate
+bitsandbytes
+
+# Evaluation & Utilities
+evaluate
+pandas
+tqdm
+python-dotenv

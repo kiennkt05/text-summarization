@@ -3,8 +3,11 @@ import argparse
 import pandas as pd
 from tqdm import tqdm
 import json
-from unsloth import FastLanguageModel
-from transformers import TextStreamer
+import torch
+
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer, BitsAndBytesConfig
+from peft import PeftModel
+
 import PTM.model.config as config
 from PTM.evaluate.rouge_eval import compute_rouge_and_bleu
 from PTM.evaluate.bertscore import compute_bertscore
@@ -13,8 +16,6 @@ def generate_summary(model, tokenizer, text, oneshot_enabled, cot_enabled, max_n
     """
     Generates a summary for a given text using the fine-tuned model.
     """
-    FastLanguageModel.for_inference(model) # Enable native 2x faster inference
-    
     instruction = """Nhiệm vụ của bạn là đọc kỹ bài báo được cung cấp và viết một đoạn tóm tắt ngắn gọn, súc tích nhưng vẫn giữ được các thông điệp cốt lõi.
 
 Hãy áp dụng phương pháp tư duy từng bước (Chain-of-Thought) theo hướng dẫn sau:
@@ -54,7 +55,7 @@ Hà Nội tổ chức gần 20 sự kiện từ 19/4 đến 10/5, bao gồm Lễ
 {}"""
 
     prompt = alpaca_prompt.format(oneshot, instruction, text, "")
-    inputs = tokenizer([prompt], return_tensors="pt").to("cuda")
+    inputs = tokenizer([prompt], return_tensors="pt").to(model.device)
 
     if stream:
         text_streamer = TextStreamer(tokenizer, skip_prompt=True)
@@ -82,8 +83,6 @@ def generate_summary_batch(model, tokenizer, texts, oneshot_enabled, cot_enabled
     """
     Generates summaries for a batch of texts using the fine-tuned model.
     """
-    FastLanguageModel.for_inference(model) # Enable native 2x faster inference
-    
     instruction = """Nhiệm vụ của bạn là đọc kỹ bài báo được cung cấp và viết một đoạn tóm tắt ngắn gọn, súc tích nhưng vẫn giữ được các thông điệp cốt lõi.
 
 Hãy áp dụng phương pháp tư duy từng bước (Chain-of-Thought) theo hướng dẫn sau:
@@ -126,14 +125,19 @@ Hà Nội tổ chức gần 20 sự kiện từ 19/4 đến 10/5, bao gồm Lễ
     
     # Left padding is required for batched generation in causal LMs
     tokenizer.padding_side = "left"
-    inputs = tokenizer(prompts, return_tensors="pt", padding=True).to("cuda")
+    
+    # Ensure pad token is set (some tokenizers like LLaMA don't have one by default)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(model.device)
 
     outputs = model.generate(
         input_ids=inputs.input_ids, 
         attention_mask=inputs.attention_mask,
         max_new_tokens=max_new_tokens, 
         use_cache=True, 
-        pad_token_id=tokenizer.eos_token_id
+        pad_token_id=tokenizer.pad_token_id
     )
     
     # Decode only the generated part by slicing past the prompt length
@@ -180,12 +184,12 @@ def evaluate_dataset(model, tokenizer, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate PTM or Generate Summary")
-    parser.add_argument("--model_name", type=str, default=config.MODEL_NAME, help="Name of the model to fine-tune")
+    parser.add_argument("--model_name", type=str, default=config.MODEL_NAME, help="Name of the base model")
     parser.add_argument("--oneshot_enabled", action="store_true", default=False, help="Enable oneshot")
     parser.add_argument("--cot_enabled", action="store_true", default=False, help="Enable cot")
     parser.add_argument("--max_seq_length", type=int, default=config.MAX_SEQ_LENGTH, help="Max sequence length")
     parser.add_argument("--max_new_tokens", type=int, default=config.MAX_NEW_TOKENS, help="Max new tokens")
-    parser.add_argument("--dtype", type=str, default=config.DTYPE, help="Data type")
+    parser.add_argument("--dtype", type=str, default=config.DTYPE, help="Data type (e.g., float16, bfloat16)")
     parser.add_argument("--load_in_4bit", type=bool, default=config.LOAD_IN_4BIT, help="Load in 4bit")
     parser.add_argument("--model_path", type=str, default=f"{config.OUTPUT_DIR}/lora_model", help="Path to saved LoRA model. If not provided, uses the original pretrained model.")
     parser.add_argument("--test_path", type=str, default=None, help="Path to test parquet dataset for evaluation")
@@ -197,16 +201,49 @@ if __name__ == "__main__":
     if args.test_path is None and args.text is None:
         raise ValueError("Must provide either --test_path for evaluation or --text for single inference.")
     
-    model_name_to_load = args.model_path if args.model_path and os.path.exists(args.model_path) else args.model_name
-    print(f"Loading model: {model_name_to_load}")
+    # Determine correct torch dtype
+    if args.dtype == "bfloat16":
+        torch_dtype = torch.bfloat16
+    elif args.dtype == "float16":
+        torch_dtype = torch.float16
+    else:
+        torch_dtype = torch.float32
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = model_name_to_load,
-        max_seq_length = args.max_seq_length,
-        dtype = args.dtype,
-        load_in_4bit = args.load_in_4bit,
+    # Set up quantization if load_in_4bit is requested
+    quantization_config = None
+    if args.load_in_4bit:
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch_dtype,
+            bnb_4bit_quant_type="nf4", # Standard optimal format for 4-bit
+            bnb_4bit_use_double_quant=True
+        )
+
+    print(f"Loading base model: {args.model_name}")
+    
+    # 1. Load Tokenizer
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, padding_side="left")
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+        
+    # 2. Load Base Model
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model_name,
+        quantization_config=quantization_config,
+        torch_dtype=torch_dtype,
+        device_map="auto"
     )
     
+    # 3. Apply LoRA weights if model_path exists
+    if args.model_path and os.path.exists(args.model_path):
+        print(f"Loading LoRA weights from: {args.model_path}")
+        model = PeftModel.from_pretrained(model, args.model_path)
+    else:
+        print("Running base model (No LoRA adapter found).")
+        
+    # Set to evaluation mode
+    model.eval()
+
     if args.test_path:
         evaluate_dataset(model, tokenizer, args)
     elif args.text:

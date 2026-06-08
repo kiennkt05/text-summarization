@@ -62,9 +62,8 @@ def train_step(model, optimizer, criterion, scheduler, train_dataloader, pad_idx
         batch = Batch(src_ids, tgt_ids, pad_idx, device=device)
         optimizer.zero_grad()
         
-        with autocast(device_type=device_type, dtype=torch.float16, enabled=(device_type == 'cuda')):
-            output = model(batch.src, batch.tgt, batch.src_mask, batch.tgt_mask)
-            loss = criterion(output.contiguous().view(-1, output.size(-1)), batch.tgt_y.contiguous().view(-1))
+        output = model(batch.src, batch.tgt, batch.src_mask, batch.tgt_mask)
+        loss = criterion(output.contiguous().view(-1, output.size(-1)), batch.tgt_y.contiguous().view(-1))
             
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
@@ -94,9 +93,8 @@ def validate_step(model, criterion, validate_dataloader, pad_idx, epoch_num):
     for src_ids, tgt_ids in validate_bar:
         batch = Batch(src_ids, tgt_ids, pad_idx, device=device)
         
-        with autocast(device_type=device_type, dtype=torch.float16, enabled=(device_type == 'cuda')):
-            output = model(batch.src, batch.tgt, batch.src_mask, batch.tgt_mask)
-            loss = criterion(output.contiguous().view(-1, output.size(-1)), batch.tgt_y.contiguous().view(-1))
+        output = model(batch.src, batch.tgt, batch.src_mask, batch.tgt_mask)
+        loss = criterion(output.contiguous().view(-1, output.size(-1)), batch.tgt_y.contiguous().view(-1))
             
         total_loss += loss.item()
         validate_bar.set_postfix(loss=f"{loss.item():.4f}")
